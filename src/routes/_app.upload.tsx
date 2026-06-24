@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { UploadCloud, FileText, X, CheckCircle2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { UploadCloud, FileText, X, CheckCircle2, Sparkles, Eye, Loader2 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { extractDocument } from "@/lib/extract.functions";
 
 export const Route = createFileRoute("/_app/upload")({
   head: () => ({ meta: [{ title: "Upload — IdentityOS" }] }),
   component: UploadPage,
 });
 
-type Pending = { id: string; name: string; size: string; progress: number; done: boolean };
+type Pending = { id: string; name: string; size: string; progress: number; done: boolean; stage: string };
 type DocRow = {
   id: string; name: string; doc_type: string; size_bytes: number;
-  tags: string[]; created_at: string;
+  tags: string[]; created_at: string; storage_path: string; mime_type: string | null;
+  extracted: any; extraction_status: string;
 };
 
 function fmtSize(b: number) {
@@ -41,11 +45,13 @@ function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [queue, setQueue] = useState<Pending[]>([]);
   const [library, setLibrary] = useState<DocRow[]>([]);
+  const [preview, setPreview] = useState<{ doc: DocRow; url: string } | null>(null);
+  const runExtract = useServerFn(extractDocument);
 
   const refresh = async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("id, name, doc_type, size_bytes, tags, created_at")
+      .select("id, name, doc_type, size_bytes, tags, created_at, storage_path, mime_type, extracted, extraction_status")
       .order("created_at", { ascending: false });
     if (error) {
       toast.error(error.message);
@@ -66,20 +72,20 @@ function UploadPage() {
     }
     for (const file of Array.from(files)) {
       const pid = `u${Date.now()}-${Math.random()}`;
-      setQueue((q) => [{ id: pid, name: file.name, size: fmtSize(file.size), progress: 10, done: false }, ...q]);
+      setQueue((q) => [{ id: pid, name: file.name, size: fmtSize(file.size), progress: 10, done: false, stage: "Uploading…" }, ...q]);
       const path = `${userId}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(path, file, {
         cacheControl: "3600",
         upsert: false,
         contentType: file.type || undefined,
       });
-      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 70 } : i));
+      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 45, stage: "Stored" } : i));
       if (upErr) {
         toast.error(`Upload failed: ${upErr.message}`);
         setQueue((q) => q.filter((i) => i.id !== pid));
         continue;
       }
-      const { error: insErr } = await supabase.from("documents").insert({
+      const { data: inserted, error: insErr } = await supabase.from("documents").insert({
         user_id: userId,
         name: file.name,
         doc_type: inferType(file.name),
@@ -87,16 +93,24 @@ function UploadPage() {
         storage_path: path,
         mime_type: file.type || null,
         tags: [],
-      });
+        extraction_status: "pending",
+      }).select("id").single();
       if (insErr) {
         toast.error(insErr.message);
         setQueue((q) => q.filter((i) => i.id !== pid));
         continue;
       }
-      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true } : i));
-      toast.success(`Uploaded ${file.name}`);
+      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 70, stage: "Extracting with AI…" } : i));
+      try {
+        await runExtract({ data: { documentId: inserted!.id } });
+        setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true, stage: "Done" } : i));
+        toast.success(`Processed ${file.name}`);
+      } catch (e: any) {
+        setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true, stage: "Stored (AI failed)" } : i));
+        toast.error(`AI extraction failed: ${e?.message ?? "unknown"}`);
+      }
+      await refresh();
     }
-    refresh();
   };
 
   const removeDoc = async (id: string, name: string) => {
@@ -106,6 +120,14 @@ function UploadPage() {
     const { error } = await supabase.from("documents").delete().eq("id", id);
     if (error) toast.error(error.message);
     else { toast.success(`Removed ${name}`); refresh(); }
+  };
+
+  const openPreview = async (doc: DocRow) => {
+    const { data, error } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(doc.storage_path, 600);
+    if (error || !data) { toast.error(error?.message ?? "Could not load preview"); return; }
+    setPreview({ doc, url: data.signedUrl });
   };
 
   return (
@@ -151,13 +173,15 @@ function UploadPage() {
             {queue.map((q) => (
               <div key={q.id} className="flex items-center gap-4 p-4">
                 <div className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="h-5 w-5" />
+                  {q.done ? <FileText className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="truncate font-medium">{q.name}</div>
                     <div className="flex flex-none items-center gap-2 text-xs text-muted-foreground">
-                      {q.size}
+                      <span>{q.stage}</span>
+                      <span>·</span>
+                      <span>{q.size}</span>
                       {q.done ? (
                         <CheckCircle2 className="h-4 w-4 text-primary" />
                       ) : (
@@ -189,14 +213,28 @@ function UploadPage() {
                   <FileText className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{d.name}</div>
+                  <div className="flex items-center gap-2 truncate font-medium">
+                    <span className="truncate">{d.name}</span>
+                    {d.extraction_status === "done" && (
+                      <Badge variant="outline" className="gap-1 text-[10px]"><Sparkles className="h-3 w-3" /> AI</Badge>
+                    )}
+                    {d.extraction_status === "pending" && (
+                      <Badge variant="outline" className="text-[10px]">Pending</Badge>
+                    )}
+                    {d.extraction_status === "failed" && (
+                      <Badge variant="destructive" className="text-[10px]">Failed</Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {d.doc_type} · {fmtSize(d.size_bytes)} · {new Date(d.created_at).toLocaleDateString()}
                   </div>
                 </div>
                 <div className="hidden gap-1.5 md:flex">
-                  {d.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
+                  {d.tags.slice(0, 4).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
                 </div>
+                <Button variant="ghost" size="icon" onClick={() => openPreview(d)} aria-label="Preview">
+                  <Eye className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => removeDoc(d.id, d.name)} aria-label="Delete">
                   <X className="h-4 w-4" />
                 </Button>
@@ -205,6 +243,75 @@ function UploadPage() {
           </Card>
         )}
       </section>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="truncate">{preview?.doc.name}</DialogTitle>
+          </DialogHeader>
+          {preview && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="aspect-[3/4] overflow-hidden rounded-lg border bg-muted">
+                {preview.doc.mime_type?.startsWith("image/") ? (
+                  <img src={preview.url} alt={preview.doc.name} className="h-full w-full object-contain" />
+                ) : (
+                  <iframe src={preview.url} title={preview.doc.name} className="h-full w-full" />
+                )}
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Type</div>
+                  <div className="font-medium">{preview.doc.extracted?.documentType ?? preview.doc.doc_type}</div>
+                </div>
+                {preview.doc.extracted?.title && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Title</div>
+                    <div className="font-medium">{preview.doc.extracted.title}</div>
+                  </div>
+                )}
+                {preview.doc.extracted?.organization && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Organization</div>
+                    <div>{preview.doc.extracted.organization}</div>
+                  </div>
+                )}
+                {preview.doc.extracted?.date && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Date</div>
+                    <div>{preview.doc.extracted.date}</div>
+                  </div>
+                )}
+                {!!preview.doc.extracted?.skills?.length && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Skills</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {preview.doc.extracted.skills.map((s: string) => (
+                        <Badge key={s} variant="secondary">{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!!preview.doc.extracted?.technologies?.length && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Technologies</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {preview.doc.extracted.technologies.map((s: string) => (
+                        <Badge key={s} variant="outline">{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {preview.doc.extracted?.summary && (
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Summary</div>
+                    <p className="text-muted-foreground">{preview.doc.extracted.summary}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
