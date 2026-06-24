@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { UploadCloud, FileText, X, CheckCircle2 } from "lucide-react";
 
@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { recentUploads } from "@/lib/mock-data";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/upload")({
   head: () => ({ meta: [{ title: "Upload — IdentityOS" }] }),
@@ -14,46 +15,97 @@ export const Route = createFileRoute("/_app/upload")({
 });
 
 type Pending = { id: string; name: string; size: string; progress: number; done: boolean };
+type DocRow = {
+  id: string; name: string; doc_type: string; size_bytes: number;
+  tags: string[]; created_at: string;
+};
+
+function fmtSize(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function inferType(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("transcript")) return "Transcript";
+  if (n.includes("cert") || n.includes("certificate")) return "Certificate";
+  if (n.includes("resume") || n.includes("cv")) return "Resume";
+  if (n.includes("letter")) return "Letter";
+  if (n.includes("project") || n.includes("report")) return "Project";
+  return "Other";
+}
 
 function UploadPage() {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [queue, setQueue] = useState<Pending[]>([
-    { id: "p1", name: "Research Paper — Raft Leases.pdf", size: "2.1 MB", progress: 100, done: true },
-    { id: "p2", name: "GSoC Acceptance Email.pdf", size: "180 KB", progress: 68, done: false },
-  ]);
+  const [queue, setQueue] = useState<Pending[]>([]);
+  const [library, setLibrary] = useState<DocRow[]>([]);
 
-  const addFiles = (files: FileList | null) => {
-    if (!files) return;
-    const next: Pending[] = Array.from(files).map((f, i) => ({
-      id: `u${Date.now()}-${i}`,
-      name: f.name,
-      size: `${(f.size / 1024 / 1024).toFixed(2)} MB`,
-      progress: 0,
-      done: false,
-    }));
-    setQueue((q) => [...next, ...q]);
-    next.forEach((n) => simulate(n.id));
+  const refresh = async () => {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, name, doc_type, size_bytes, tags, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setLibrary((data ?? []) as DocRow[]);
   };
 
-  const simulate = (id: string) => {
-    const tick = () => {
-      setQueue((q) =>
-        q.map((i) => {
-          if (i.id !== id || i.done) return i;
-          const p = Math.min(100, i.progress + Math.random() * 22);
-          return { ...i, progress: p, done: p >= 100 };
-        }),
-      );
-    };
-    const iv = setInterval(() => {
-      tick();
-      setQueue((q) => {
-        const it = q.find((i) => i.id === id);
-        if (it?.done) clearInterval(iv);
-        return q;
+  useEffect(() => { refresh(); }, []);
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) {
+      toast.error("Please sign in to upload");
+      return;
+    }
+    for (const file of Array.from(files)) {
+      const pid = `u${Date.now()}-${Math.random()}`;
+      setQueue((q) => [{ id: pid, name: file.name, size: fmtSize(file.size), progress: 10, done: false }, ...q]);
+      const path = `${userId}/${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage.from("documents").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || undefined,
       });
-    }, 350);
+      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 70 } : i));
+      if (upErr) {
+        toast.error(`Upload failed: ${upErr.message}`);
+        setQueue((q) => q.filter((i) => i.id !== pid));
+        continue;
+      }
+      const { error: insErr } = await supabase.from("documents").insert({
+        user_id: userId,
+        name: file.name,
+        doc_type: inferType(file.name),
+        size_bytes: file.size,
+        storage_path: path,
+        mime_type: file.type || null,
+        tags: [],
+      });
+      if (insErr) {
+        toast.error(insErr.message);
+        setQueue((q) => q.filter((i) => i.id !== pid));
+        continue;
+      }
+      setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true } : i));
+      toast.success(`Uploaded ${file.name}`);
+    }
+    refresh();
+  };
+
+  const removeDoc = async (id: string, name: string) => {
+    // Best-effort delete from storage too
+    const { data: row } = await supabase.from("documents").select("storage_path").eq("id", id).maybeSingle();
+    if (row?.storage_path) await supabase.storage.from("documents").remove([row.storage_path]);
+    const { error } = await supabase.from("documents").delete().eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success(`Removed ${name}`); refresh(); }
   };
 
   return (
@@ -125,22 +177,33 @@ function UploadPage() {
 
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold">Library</h2>
-        <Card className="divide-y p-0">
-          {recentUploads.map((d) => (
-            <div key={d.id} className="flex items-center gap-4 p-4 hover:bg-muted/40">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <FileText className="h-5 w-5" />
+        {library.length === 0 ? (
+          <Card className="p-10 text-center text-sm text-muted-foreground">
+            No documents yet. Upload your first one above.
+          </Card>
+        ) : (
+          <Card className="divide-y p-0">
+            {library.map((d) => (
+              <div key={d.id} className="flex items-center gap-4 p-4 hover:bg-muted/40">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{d.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {d.doc_type} · {fmtSize(d.size_bytes)} · {new Date(d.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="hidden gap-1.5 md:flex">
+                  {d.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => removeDoc(d.id, d.name)} aria-label="Delete">
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{d.name}</div>
-                <div className="text-xs text-muted-foreground">{d.type} · {d.size} · {d.uploaded}</div>
-              </div>
-              <div className="hidden gap-1.5 md:flex">
-                {d.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
-              </div>
-            </div>
-          ))}
-        </Card>
+            ))}
+          </Card>
+        )}
       </section>
     </div>
   );
