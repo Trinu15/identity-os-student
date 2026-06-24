@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Upload,
@@ -9,6 +9,7 @@ import {
   Sparkles,
   LogOut,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 import {
   Sidebar,
@@ -37,6 +38,12 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const navigate = useNavigate();
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    navigate({ to: "/", replace: true });
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -80,11 +87,9 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Sign out">
-              <Link to="/" className="flex items-center gap-2 text-muted-foreground">
-                <LogOut className="h-4 w-4" />
-                {!collapsed && <span>Sign out</span>}
-              </Link>
+            <SidebarMenuButton onClick={signOut} tooltip="Sign out">
+              <LogOut className="h-4 w-4" />
+              {!collapsed && <span>Sign out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
