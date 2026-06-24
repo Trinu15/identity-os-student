@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles, GraduationCap, ShieldCheck, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,11 +24,46 @@ export const Route = createFileRoute("/")({
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [signInData, setSignInData] = useState({ email: "", password: "" });
+  const [signUpData, setSignUpData] = useState({ name: "", email: "", password: "" });
 
-  const submit = (e: React.FormEvent) => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate({ to: "/dashboard", replace: true });
+    });
+  }, [navigate]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => navigate({ to: "/dashboard" }), 400);
+    const { error } = await supabase.auth.signInWithPassword(signInData);
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Welcome back!");
+    navigate({ to: "/dashboard" });
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await supabase.auth.signUp({
+      email: signUpData.email,
+      password: signUpData.password,
+      options: {
+        data: { name: signUpData.name },
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Account created. Welcome to IdentityOS!");
+    navigate({ to: "/dashboard" });
   };
 
   return (
@@ -86,14 +123,18 @@ function AuthPage() {
             </TabsList>
 
             <TabsContent value="signin" className="mt-6">
-              <form onSubmit={submit} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="aarav@university.edu" defaultValue="aarav.mehta@university.edu" required />
+                  <Input id="email" type="email" placeholder="you@university.edu" required
+                    value={signInData.email}
+                    onChange={(e) => setSignInData((s) => ({ ...s, email: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" defaultValue="demo-password" required />
+                  <Input id="password" type="password" required
+                    value={signInData.password}
+                    onChange={(e) => setSignInData((s) => ({ ...s, password: e.target.value }))} />
                 </div>
                 <Button type="submit" className="w-full bg-gradient-primary text-primary-foreground shadow-elegant hover:opacity-95" disabled={loading}>
                   {loading ? "Signing in…" : "Sign in"}
@@ -102,18 +143,24 @@ function AuthPage() {
             </TabsContent>
 
             <TabsContent value="signup" className="mt-6">
-              <form onSubmit={submit} className="space-y-4">
+              <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full name</Label>
-                  <Input id="name" placeholder="Aarav Mehta" required />
+                  <Input id="name" placeholder="Aarav Mehta" required
+                    value={signUpData.name}
+                    onChange={(e) => setSignUpData((s) => ({ ...s, name: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email2">Student email</Label>
-                  <Input id="email2" type="email" placeholder="you@university.edu" required />
+                  <Input id="email2" type="email" placeholder="you@university.edu" required
+                    value={signUpData.email}
+                    onChange={(e) => setSignUpData((s) => ({ ...s, email: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password2">Password</Label>
-                  <Input id="password2" type="password" required />
+                  <Input id="password2" type="password" required minLength={6}
+                    value={signUpData.password}
+                    onChange={(e) => setSignUpData((s) => ({ ...s, password: e.target.value }))} />
                 </div>
                 <Button type="submit" className="w-full bg-gradient-primary text-primary-foreground shadow-elegant hover:opacity-95" disabled={loading}>
                   {loading ? "Creating…" : "Create account"}
