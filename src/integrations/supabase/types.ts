@@ -78,6 +78,9 @@ export type Database = {
         Row: {
           created_at: string
           doc_type: string
+          extracted: Json | null
+          extracted_text: string | null
+          extraction_status: string
           id: string
           mime_type: string | null
           name: string
@@ -89,6 +92,9 @@ export type Database = {
         Insert: {
           created_at?: string
           doc_type?: string
+          extracted?: Json | null
+          extracted_text?: string | null
+          extraction_status?: string
           id?: string
           mime_type?: string | null
           name: string
@@ -100,6 +106,9 @@ export type Database = {
         Update: {
           created_at?: string
           doc_type?: string
+          extracted?: Json | null
+          extracted_text?: string | null
+          extraction_status?: string
           id?: string
           mime_type?: string | null
           name?: string
