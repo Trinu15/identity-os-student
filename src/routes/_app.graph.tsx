@@ -1,7 +1,14 @@
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { Loader2, Sparkles, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { graphEdges, graphNodes } from "@/lib/mock-data";
+import { supabase } from "@/integrations/supabase/client";
+import { rebuildRelationships } from "@/lib/relationships.functions";
 
 export const Route = createFileRoute("/_app/graph")({
   head: () => ({ meta: [{ title: "Knowledge Graph — IdentityOS" }] }),
@@ -19,6 +26,43 @@ const groupColor: Record<string, string> = {
 };
 
 function GraphPage() {
+  const discover = useServerFn(rebuildRelationships);
+  const [running, setRunning] = useState(false);
+  const [rels, setRels] = useState<
+    { id: string; source_type: string; target_type: string; label: string | null; confidence: number | null; created_at: string }[]
+  >([]);
+
+  const loadRels = async () => {
+    const { data } = await supabase
+      .from("relationships")
+      .select("id, source_type, target_type, label, confidence, created_at")
+      .order("confidence", { ascending: false })
+      .limit(100);
+    setRels((data ?? []) as any);
+  };
+
+  useEffect(() => { loadRels(); }, []);
+
+  const runDiscovery = async () => {
+    setRunning(true);
+    try {
+      const res = await discover();
+      toast.success(`Discovered ${res.edges} relationship${res.edges === 1 ? "" : "s"}`);
+      await loadRels();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to discover relationships");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const groups = [
+    { key: "Certification->Skill", title: "Certifications validate Skills" },
+    { key: "Skill->Project", title: "Skills power Projects" },
+    { key: "Project->Internship", title: "Projects lead to Internships" },
+    { key: "Internship->CareerGoal", title: "Internships advance Career Goals" },
+  ] as const;
+
   // radial layout
   const center = { x: 400, y: 320 };
   const radius = 230;
@@ -35,8 +79,16 @@ function GraphPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-semibold">Knowledge graph</h1>
-        <p className="mt-1 text-sm text-muted-foreground">How your experiences, skills, and credentials connect.</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-3xl font-semibold">Knowledge graph</h1>
+            <p className="mt-1 text-sm text-muted-foreground">How your experiences, skills, and credentials connect.</p>
+          </div>
+          <Button onClick={runDiscovery} disabled={running} className="gap-2">
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {running ? "Discovering…" : "Discover with AI"}
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2">
