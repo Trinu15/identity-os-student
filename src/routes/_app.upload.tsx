@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { extractDocument } from "@/lib/extract.functions";
+import { rebuildRelationships } from "@/lib/relationships.functions";
 
 export const Route = createFileRoute("/_app/upload")({
   head: () => ({ meta: [{ title: "Upload — IdentityOS" }] }),
@@ -47,6 +48,7 @@ function UploadPage() {
   const [library, setLibrary] = useState<DocRow[]>([]);
   const [preview, setPreview] = useState<{ doc: DocRow; url: string } | null>(null);
   const runExtract = useServerFn(extractDocument);
+  const runRebuild = useServerFn(rebuildRelationships);
 
   const refresh = async () => {
     const { data, error } = await supabase
@@ -110,6 +112,12 @@ function UploadPage() {
         toast.error(`AI extraction failed: ${e?.message ?? "unknown"}`);
       }
       await refresh();
+    }
+    // After a batch upload, refresh the knowledge graph
+    try {
+      await runRebuild();
+    } catch {
+      /* silent — graph page will let the user retry manually */
     }
   };
 
