@@ -15,7 +15,6 @@ import { Route as AppUploadRouteImport } from './routes/_app.upload'
 import { Route as AppTimelineRouteImport } from './routes/_app.timeline'
 import { Route as AppSearchRouteImport } from './routes/_app.search'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
-import { Route as AppGraphRouteImport } from './routes/_app.graph'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 
 const AppRoute = AppRouteImport.update({
@@ -47,11 +46,6 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
-const AppGraphRoute = AppGraphRouteImport.update({
-  id: '/graph',
-  path: '/graph',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -61,7 +55,6 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AppDashboardRoute
-  '/graph': typeof AppGraphRoute
   '/profile': typeof AppProfileRoute
   '/search': typeof AppSearchRoute
   '/timeline': typeof AppTimelineRoute
@@ -70,7 +63,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AppDashboardRoute
-  '/graph': typeof AppGraphRoute
   '/profile': typeof AppProfileRoute
   '/search': typeof AppSearchRoute
   '/timeline': typeof AppTimelineRoute
@@ -81,7 +73,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
-  '/_app/graph': typeof AppGraphRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/timeline': typeof AppTimelineRoute
@@ -92,26 +83,17 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
-    | '/graph'
     | '/profile'
     | '/search'
     | '/timeline'
     | '/upload'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/dashboard'
-    | '/graph'
-    | '/profile'
-    | '/search'
-    | '/timeline'
-    | '/upload'
+  to: '/' | '/dashboard' | '/profile' | '/search' | '/timeline' | '/upload'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/_app/dashboard'
-    | '/_app/graph'
     | '/_app/profile'
     | '/_app/search'
     | '/_app/timeline'
@@ -167,13 +149,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/graph': {
-      id: '/_app/graph'
-      path: '/graph'
-      fullPath: '/graph'
-      preLoaderRoute: typeof AppGraphRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -186,7 +161,6 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
-  AppGraphRoute: typeof AppGraphRoute
   AppProfileRoute: typeof AppProfileRoute
   AppSearchRoute: typeof AppSearchRoute
   AppTimelineRoute: typeof AppTimelineRoute
@@ -195,7 +169,6 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
-  AppGraphRoute: AppGraphRoute,
   AppProfileRoute: AppProfileRoute,
   AppSearchRoute: AppSearchRoute,
   AppTimelineRoute: AppTimelineRoute,
