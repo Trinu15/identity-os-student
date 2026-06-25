@@ -183,10 +183,26 @@ export const extractDocument = createServerFn({ method: "POST" })
 
     const docType = extracted.documentType || "Other";
 
+    const ALLOWED = ["Projects", "Skills", "Certifications", "Internships", "Achievements", "Academics"];
+    let category: string = ALLOWED.includes(extracted.category) ? extracted.category : "";
+    if (!category) {
+      const map: Record<string, string> = {
+        Resume: "Skills", Certificate: "Certifications", Internship: "Internships",
+        Project: "Projects", Transcript: "Academics", Letter: "Internships",
+        Achievement: "Achievements", Other: "Skills",
+      };
+      category = map[docType] ?? "Skills";
+    }
+    let confidence = typeof extracted.confidence === "number" ? extracted.confidence : 0.7;
+    if (confidence > 1) confidence = confidence / 100;
+    confidence = Math.max(0, Math.min(1, confidence));
+
     await supabase
       .from("documents")
       .update({
         doc_type: docType,
+        category,
+        confidence,
         tags,
         extracted,
         extracted_text: typeof extracted.extractedText === "string" ? extracted.extractedText : null,
