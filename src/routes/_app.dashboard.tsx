@@ -215,6 +215,49 @@ function Dashboard() {
       <section>
         <div className="mb-4 flex items-center justify-between">
           <div>
+            <h2 className="font-display text-lg font-semibold">AI categorization</h2>
+            <p className="text-xs text-muted-foreground">Documents auto-classified by Lovable AI with confidence scores</p>
+          </div>
+          <Badge variant="secondary" className="gap-1"><Sparkles className="h-3 w-3" /> Auto</Badge>
+        </div>
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {grouped.map((g) => (
+            <Card key={g.key} className="p-5 transition-shadow hover:shadow-elegant">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <g.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-display text-base font-semibold">{g.key}</div>
+                    <div className="text-xs text-muted-foreground">{g.count} {g.count === 1 ? "document" : "documents"}</div>
+                  </div>
+                </div>
+                {g.count > 0 && (
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    {Math.round(g.avg * 100)}%
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-4 space-y-2">
+                {g.items.slice(0, 3).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-foreground/90">{d.name}</span>
+                    <span className="flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {Math.round((d.confidence ?? 0) * 100)}%
+                    </span>
+                  </div>
+                ))}
+                {g.count === 0 && (
+                  <div className="text-xs text-muted-foreground">No documents classified yet.</div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between">
+          <div>
             <h2 className="font-display text-lg font-semibold">Recent uploads</h2>
             <p className="text-xs text-muted-foreground">Files added in the last few weeks</p>
           </div>
