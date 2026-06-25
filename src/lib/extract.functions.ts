@@ -7,12 +7,18 @@ const Input = z.object({ documentId: z.string().uuid() });
 const SYSTEM = `You are an expert resume/credential parser for a student digital identity system.
 Given a document (resume, certificate, internship letter, project report, transcript, etc.), extract structured metadata.
 Return STRICT JSON matching the provided schema. Use null or empty arrays when unknown. Dates as YYYY-MM-DD when possible.
-documentType must be one of: Resume, Certificate, Internship, Project, Transcript, Letter, Achievement, Other.`;
+documentType must be one of: Resume, Certificate, Internship, Project, Transcript, Letter, Achievement, Other.
+You MUST also classify the document into exactly ONE category from this fixed taxonomy:
+Projects, Skills, Certifications, Internships, Achievements, Academics.
+Return the chosen category in "category" and a confidence score between 0 and 1 in "confidence".
+Never refuse to categorize — pick the closest category.`;
 
 const SCHEMA = {
   type: "object",
   properties: {
     documentType: { type: "string" },
+    category: { type: "string", enum: ["Projects", "Skills", "Certifications", "Internships", "Achievements", "Academics"] },
+    confidence: { type: "number" },
     title: { type: "string" },
     organization: { type: "string" },
     date: { type: "string" },
@@ -177,10 +183,26 @@ export const extractDocument = createServerFn({ method: "POST" })
 
     const docType = extracted.documentType || "Other";
 
+    const ALLOWED = ["Projects", "Skills", "Certifications", "Internships", "Achievements", "Academics"];
+    let category: string = ALLOWED.includes(extracted.category) ? extracted.category : "";
+    if (!category) {
+      const map: Record<string, string> = {
+        Resume: "Skills", Certificate: "Certifications", Internship: "Internships",
+        Project: "Projects", Transcript: "Academics", Letter: "Internships",
+        Achievement: "Achievements", Other: "Skills",
+      };
+      category = map[docType] ?? "Skills";
+    }
+    let confidence = typeof extracted.confidence === "number" ? extracted.confidence : 0.7;
+    if (confidence > 1) confidence = confidence / 100;
+    confidence = Math.max(0, Math.min(1, confidence));
+
     await supabase
       .from("documents")
       .update({
         doc_type: docType,
+        category,
+        confidence,
         tags,
         extracted,
         extracted_text: typeof extracted.extractedText === "string" ? extracted.extractedText : null,
@@ -228,5 +250,5 @@ export const extractDocument = createServerFn({ method: "POST" })
     }));
     if (achRows.length) await supabase.from("achievements").insert(achRows);
 
-    return { ok: true, extracted, docType, tags };
+    return { ok: true, extracted, docType, tags, category, confidence };
   });

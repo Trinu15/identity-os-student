@@ -76,6 +76,8 @@ export type Database = {
       }
       documents: {
         Row: {
+          category: string | null
+          confidence: number | null
           created_at: string
           doc_type: string
           extracted: Json | null
@@ -90,6 +92,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category?: string | null
+          confidence?: number | null
           created_at?: string
           doc_type?: string
           extracted?: Json | null
@@ -104,6 +108,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category?: string | null
+          confidence?: number | null
           created_at?: string
           doc_type?: string
           extracted?: Json | null

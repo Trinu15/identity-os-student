@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy } from "lucide-react";
+import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy, GraduationCap, Brain } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_app/dashboard")({
 
 type DocRow = { id: string; name: string; doc_type: string; size_bytes: number; tags: string[]; created_at: string };
 type SkillRow = { name: string; level: number };
+type CatDoc = { id: string; name: string; category: string | null; confidence: number | null; created_at: string };
 
 function fmtSize(b: number) {
   if (b < 1024) return `${b} B`;
@@ -42,6 +43,7 @@ function Dashboard() {
   const [counts, setCounts] = useState({ documents: 0, skills: 0, certifications: 0, projects: 0, internships: 0, achievements: 0 });
   const [recent, setRecent] = useState<DocRow[]>([]);
   const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [catDocs, setCatDocs] = useState<CatDoc[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -70,6 +72,14 @@ function Dashboard() {
 
       const { data: sk } = await supabase.from("skills").select("name, level").order("level", { ascending: false }).limit(6);
       setSkills((sk ?? []) as SkillRow[]);
+
+      const { data: cd } = await supabase
+        .from("documents")
+        .select("id, name, category, confidence, created_at")
+        .not("category", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      setCatDocs((cd ?? []) as CatDoc[]);
     };
     load();
   }, []);
@@ -84,6 +94,23 @@ function Dashboard() {
   ];
 
   const skillsToShow = skills.length > 0 ? skills : fallbackSkills.slice(0, 6);
+
+  const CATEGORIES = [
+    { key: "Projects", icon: Code2 },
+    { key: "Skills", icon: Brain },
+    { key: "Certifications", icon: Award },
+    { key: "Internships", icon: Briefcase },
+    { key: "Achievements", icon: Trophy },
+    { key: "Academics", icon: GraduationCap },
+  ] as const;
+
+  const grouped = CATEGORIES.map((c) => {
+    const items = catDocs.filter((d) => d.category === c.key);
+    const avg = items.length
+      ? items.reduce((s, d) => s + (d.confidence ?? 0), 0) / items.length
+      : 0;
+    return { ...c, items, count: items.length, avg };
+  });
 
   return (
     <div className="space-y-8">
@@ -186,6 +213,49 @@ function Dashboard() {
 
       {/* Recent uploads */}
       <section>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">AI categorization</h2>
+            <p className="text-xs text-muted-foreground">Documents auto-classified by Lovable AI with confidence scores</p>
+          </div>
+          <Badge variant="secondary" className="gap-1"><Sparkles className="h-3 w-3" /> Auto</Badge>
+        </div>
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {grouped.map((g) => (
+            <Card key={g.key} className="p-5 transition-shadow hover:shadow-elegant">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <g.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-display text-base font-semibold">{g.key}</div>
+                    <div className="text-xs text-muted-foreground">{g.count} {g.count === 1 ? "document" : "documents"}</div>
+                  </div>
+                </div>
+                {g.count > 0 && (
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    {Math.round(g.avg * 100)}%
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-4 space-y-2">
+                {g.items.slice(0, 3).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-foreground/90">{d.name}</span>
+                    <span className="flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {Math.round((d.confidence ?? 0) * 100)}%
+                    </span>
+                  </div>
+                ))}
+                {g.count === 0 && (
+                  <div className="text-xs text-muted-foreground">No documents classified yet.</div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="font-display text-lg font-semibold">Recent uploads</h2>
