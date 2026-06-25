@@ -7,12 +7,18 @@ const Input = z.object({ documentId: z.string().uuid() });
 const SYSTEM = `You are an expert resume/credential parser for a student digital identity system.
 Given a document (resume, certificate, internship letter, project report, transcript, etc.), extract structured metadata.
 Return STRICT JSON matching the provided schema. Use null or empty arrays when unknown. Dates as YYYY-MM-DD when possible.
-documentType must be one of: Resume, Certificate, Internship, Project, Transcript, Letter, Achievement, Other.`;
+documentType must be one of: Resume, Certificate, Internship, Project, Transcript, Letter, Achievement, Other.
+You MUST also classify the document into exactly ONE category from this fixed taxonomy:
+Projects, Skills, Certifications, Internships, Achievements, Academics.
+Return the chosen category in "category" and a confidence score between 0 and 1 in "confidence".
+Never refuse to categorize — pick the closest category.`;
 
 const SCHEMA = {
   type: "object",
   properties: {
     documentType: { type: "string" },
+    category: { type: "string", enum: ["Projects", "Skills", "Certifications", "Internships", "Achievements", "Academics"] },
+    confidence: { type: "number" },
     title: { type: "string" },
     organization: { type: "string" },
     date: { type: "string" },
