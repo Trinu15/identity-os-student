@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy } from "lucide-react";
+import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy, GraduationCap, Brain } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_app/dashboard")({
 
 type DocRow = { id: string; name: string; doc_type: string; size_bytes: number; tags: string[]; created_at: string };
 type SkillRow = { name: string; level: number };
+type CatDoc = { id: string; name: string; category: string | null; confidence: number | null; created_at: string };
 
 function fmtSize(b: number) {
   if (b < 1024) return `${b} B`;
@@ -42,6 +43,7 @@ function Dashboard() {
   const [counts, setCounts] = useState({ documents: 0, skills: 0, certifications: 0, projects: 0, internships: 0, achievements: 0 });
   const [recent, setRecent] = useState<DocRow[]>([]);
   const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [catDocs, setCatDocs] = useState<CatDoc[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -70,6 +72,14 @@ function Dashboard() {
 
       const { data: sk } = await supabase.from("skills").select("name, level").order("level", { ascending: false }).limit(6);
       setSkills((sk ?? []) as SkillRow[]);
+
+      const { data: cd } = await supabase
+        .from("documents")
+        .select("id, name, category, confidence, created_at")
+        .not("category", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      setCatDocs((cd ?? []) as CatDoc[]);
     };
     load();
   }, []);
@@ -84,6 +94,23 @@ function Dashboard() {
   ];
 
   const skillsToShow = skills.length > 0 ? skills : fallbackSkills.slice(0, 6);
+
+  const CATEGORIES = [
+    { key: "Projects", icon: Code2 },
+    { key: "Skills", icon: Brain },
+    { key: "Certifications", icon: Award },
+    { key: "Internships", icon: Briefcase },
+    { key: "Achievements", icon: Trophy },
+    { key: "Academics", icon: GraduationCap },
+  ] as const;
+
+  const grouped = CATEGORIES.map((c) => {
+    const items = catDocs.filter((d) => d.category === c.key);
+    const avg = items.length
+      ? items.reduce((s, d) => s + (d.confidence ?? 0), 0) / items.length
+      : 0;
+    return { ...c, items, count: items.length, avg };
+  });
 
   return (
     <div className="space-y-8">
