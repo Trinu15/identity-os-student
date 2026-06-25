@@ -235,6 +235,7 @@ export type Database = {
       }
       relationships: {
         Row: {
+          confidence: number | null
           created_at: string
           id: string
           label: string | null
@@ -245,6 +246,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          confidence?: number | null
           created_at?: string
           id?: string
           label?: string | null
@@ -255,6 +257,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          confidence?: number | null
           created_at?: string
           id?: string
           label?: string | null
