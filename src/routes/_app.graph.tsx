@@ -143,32 +143,51 @@ function GraphPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Strongest connections</div>
-          <div className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between"><span>You ↔ TypeScript</span><span className="text-muted-foreground">5 docs</span></div>
-            <div className="flex justify-between"><span>You ↔ Stripe</span><span className="text-muted-foreground">4 docs</span></div>
-            <div className="flex justify-between"><span>You ↔ IIT Bombay</span><span className="text-muted-foreground">9 docs</span></div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Emerging clusters</div>
-          <div className="mt-3 space-y-2 text-sm">
-            <div>Distributed systems · 6 nodes</div>
-            <div>Cloud infrastructure · 4 nodes</div>
-            <div>ML research · 3 nodes</div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Suggested next</div>
-          <div className="mt-3 space-y-2 text-sm">
-            <div>+ Add LinkedIn endorsements</div>
-            <div>+ Link GitHub repositories</div>
-            <div>+ Verify Stripe internship</div>
-          </div>
-        </Card>
-      </div>
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-display text-lg font-semibold">AI-discovered relationships</h2>
+          <p className="text-xs text-muted-foreground">
+            {rels.length === 0
+              ? "Click Discover with AI to map how your credentials, skills, projects and internships connect."
+              : `${rels.length} connection${rels.length === 1 ? "" : "s"} found across your identity.`}
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {groups.map((g) => {
+            const items = rels.filter((r) => `${r.source_type}->${r.target_type}` === g.key);
+            return (
+              <Card key={g.key} className="p-5">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">{g.title}</div>
+                  <Badge variant="secondary" className="font-mono text-[10px]">{items.length}</Badge>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {items.length === 0 && (
+                    <div className="text-xs text-muted-foreground">No connections yet.</div>
+                  )}
+                  {items.slice(0, 6).map((r) => {
+                    const parts = (r.label ?? "").split(" → ");
+                    const left = parts[0] ?? "—";
+                    const rightRaw = parts[1] ?? "";
+                    const [right, note] = rightRaw.split(" · ");
+                    return (
+                      <div key={r.id} className="flex items-center gap-2 rounded-md border bg-card/40 px-3 py-2 text-xs">
+                        <span className="truncate font-medium">{left}</span>
+                        <ArrowRight className="h-3 w-3 flex-none text-muted-foreground" />
+                        <span className="truncate text-foreground/90">{right}</span>
+                        {note && <span className="ml-auto hidden truncate text-muted-foreground sm:inline">{note}</span>}
+                        <span className="ml-auto flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {Math.round((r.confidence ?? 0) * 100)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
