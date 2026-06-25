@@ -250,5 +250,5 @@ export const extractDocument = createServerFn({ method: "POST" })
     }));
     if (achRows.length) await supabase.from("achievements").insert(achRows);
 
-    return { ok: true, extracted, docType, tags };
+    return { ok: true, extracted, docType, tags, category, confidence };
   });
