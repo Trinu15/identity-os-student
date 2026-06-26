@@ -31,6 +31,9 @@ function fmtSize(b: number) {
   return `${(b / 1024 / 1024).toFixed(2)} MB`;
 }
 
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.docx";
+
 function inferType(name: string): string {
   const n = name.toLowerCase();
   if (n.includes("transcript")) return "Transcript";
@@ -56,7 +59,8 @@ function UploadPage() {
       .select("id, name, doc_type, size_bytes, tags, created_at, storage_path, mime_type, extracted, extraction_status")
       .order("created_at", { ascending: false });
     if (error) {
-      toast.error(error.message);
+      console.error("[upload] refresh failed", error);
+      toast.error("Could not load your documents. Please try again.");
       return;
     }
     setLibrary((data ?? []) as DocRow[]);
@@ -73,6 +77,10 @@ function UploadPage() {
       return;
     }
     for (const file of Array.from(files)) {
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`${file.name} exceeds the 25 MB limit`);
+        continue;
+      }
       const pid = `u${Date.now()}-${Math.random()}`;
       setQueue((q) => [{ id: pid, name: file.name, size: fmtSize(file.size), progress: 10, done: false, stage: "Uploading…" }, ...q]);
       const path = `${userId}/${Date.now()}-${file.name}`;
@@ -83,7 +91,8 @@ function UploadPage() {
       });
       setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 45, stage: "Stored" } : i));
       if (upErr) {
-        toast.error(`Upload failed: ${upErr.message}`);
+        console.error("[upload] storage upload failed", upErr);
+        toast.error(`Upload failed for ${file.name}. Please try again.`);
         setQueue((q) => q.filter((i) => i.id !== pid));
         continue;
       }
@@ -98,7 +107,8 @@ function UploadPage() {
         extraction_status: "pending",
       }).select("id").single();
       if (insErr) {
-        toast.error(insErr.message);
+        console.error("[upload] document insert failed", insErr);
+        toast.error(`Could not save ${file.name}. Please try again.`);
         setQueue((q) => q.filter((i) => i.id !== pid));
         continue;
       }
@@ -108,8 +118,9 @@ function UploadPage() {
         setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true, stage: "Done" } : i));
         toast.success(`Processed ${file.name}`);
       } catch (e: any) {
+        console.error("[upload] AI extraction failed", e);
         setQueue((q) => q.map((i) => i.id === pid ? { ...i, progress: 100, done: true, stage: "Stored (AI failed)" } : i));
-        toast.error(`AI extraction failed: ${e?.message ?? "unknown"}`);
+        toast.error(`AI extraction failed for ${file.name}. The file was stored — try again later.`);
       }
       await refresh();
     }
@@ -126,7 +137,10 @@ function UploadPage() {
     const { data: row } = await supabase.from("documents").select("storage_path").eq("id", id).maybeSingle();
     if (row?.storage_path) await supabase.storage.from("documents").remove([row.storage_path]);
     const { error } = await supabase.from("documents").delete().eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) {
+      console.error("[upload] delete failed", error);
+      toast.error(`Could not remove ${name}. Please try again.`);
+    }
     else { toast.success(`Removed ${name}`); refresh(); }
   };
 
@@ -134,7 +148,11 @@ function UploadPage() {
     const { data, error } = await supabase.storage
       .from("documents")
       .createSignedUrl(doc.storage_path, 600);
-    if (error || !data) { toast.error(error?.message ?? "Could not load preview"); return; }
+    if (error || !data) {
+      if (error) console.error("[upload] signed url failed", error);
+      toast.error("Could not load preview.");
+      return;
+    }
     setPreview({ doc, url: data.signedUrl });
   };
 
@@ -166,6 +184,7 @@ function UploadPage() {
           ref={input}
           type="file"
           multiple
+          accept={ACCEPTED_TYPES}
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />
