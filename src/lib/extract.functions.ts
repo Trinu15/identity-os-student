@@ -104,12 +104,18 @@ export const extractDocument = createServerFn({ method: "POST" })
       .select("id, name, mime_type, storage_path, user_id")
       .eq("id", data.documentId)
       .maybeSingle();
-    if (docErr || !doc) throw new Error(docErr?.message ?? "Document not found");
+    if (docErr || !doc) {
+      if (docErr) console.error("[extractDocument] document lookup failed", docErr);
+      throw new Error("Document not found.");
+    }
 
     const { data: file, error: dlErr } = await supabase.storage
       .from("documents")
       .download(doc.storage_path);
-    if (dlErr || !file) throw new Error(dlErr?.message ?? "Could not download file");
+    if (dlErr || !file) {
+      if (dlErr) console.error("[extractDocument] download failed", dlErr);
+      throw new Error("Could not download the uploaded file.");
+    }
 
     // Build user content
     const userContent: any[] = [
@@ -158,13 +164,14 @@ export const extractDocument = createServerFn({ method: "POST" })
 
     if (!resp.ok) {
       const errText = await resp.text();
+      console.error("[extractDocument] AI gateway error", resp.status, errText);
       await supabase
         .from("documents")
         .update({ extraction_status: "failed" })
         .eq("id", doc.id);
       if (resp.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
       if (resp.status === 402) throw new Error("AI credits exhausted. Please add credits to continue.");
-      throw new Error(`AI extraction failed: ${errText.slice(0, 200)}`);
+      throw new Error("Failed to process document. Please try again.");
     }
 
     const json = await resp.json();
