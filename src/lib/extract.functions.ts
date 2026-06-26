@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const Input = z.object({ documentId: z.string().uuid() });
 
+const MAX_EXTRACT_BYTES = 25 * 1024 * 1024; // 25 MB
+
 const SYSTEM = `You are an expert resume/credential parser for a student digital identity system.
 Given a document (resume, certificate, internship letter, project report, transcript, etc.), extract structured metadata.
 Return STRICT JSON matching the provided schema. Use null or empty arrays when unknown. Dates as YYYY-MM-DD when possible.
@@ -115,6 +117,14 @@ export const extractDocument = createServerFn({ method: "POST" })
     if (dlErr || !file) {
       if (dlErr) console.error("[extractDocument] download failed", dlErr);
       throw new Error("Could not download the uploaded file.");
+    }
+
+    if (file.size > MAX_EXTRACT_BYTES) {
+      await supabase
+        .from("documents")
+        .update({ extraction_status: "failed" })
+        .eq("id", doc.id);
+      throw new Error("File exceeds the 25 MB limit.");
     }
 
     // Build user content
