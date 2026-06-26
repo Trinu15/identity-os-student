@@ -67,9 +67,10 @@ export const rebuildRelationships = createServerFn({ method: "POST" })
 
     if (!resp.ok) {
       const t = await resp.text();
+      console.error("[rebuildRelationships] AI gateway error", resp.status, t);
       if (resp.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
       if (resp.status === 402) throw new Error("AI credits exhausted. Please add credits to continue.");
-      throw new Error(`AI failed: ${t.slice(0, 200)}`);
+      throw new Error("Failed to rebuild relationships. Please try again.");
     }
 
     const json = await resp.json();
@@ -116,7 +117,10 @@ export const rebuildRelationships = createServerFn({ method: "POST" })
 
     if (rows.length) {
       const { error } = await supabase.from("relationships").insert(rows);
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[rebuildRelationships] insert failed", error);
+        throw new Error("Failed to save discovered relationships.");
+      }
     }
 
     return { ok: true, edges: rows.length };
