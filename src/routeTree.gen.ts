@@ -17,6 +17,7 @@ import { Route as AppSearchRouteImport } from './routes/_app.search'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppGraphRouteImport } from './routes/_app.graph'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppCopilotRouteImport } from './routes/_app.copilot'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -57,9 +58,15 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCopilotRoute = AppCopilotRouteImport.update({
+  id: '/copilot',
+  path: '/copilot',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/copilot': typeof AppCopilotRoute
   '/dashboard': typeof AppDashboardRoute
   '/graph': typeof AppGraphRoute
   '/profile': typeof AppProfileRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/copilot': typeof AppCopilotRoute
   '/dashboard': typeof AppDashboardRoute
   '/graph': typeof AppGraphRoute
   '/profile': typeof AppProfileRoute
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/_app/copilot': typeof AppCopilotRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/graph': typeof AppGraphRoute
   '/_app/profile': typeof AppProfileRoute
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/copilot'
     | '/dashboard'
     | '/graph'
     | '/profile'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/copilot'
     | '/dashboard'
     | '/graph'
     | '/profile'
@@ -110,6 +121,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/_app/copilot'
     | '/_app/dashboard'
     | '/_app/graph'
     | '/_app/profile'
@@ -181,10 +193,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/copilot': {
+      id: '/_app/copilot'
+      path: '/copilot'
+      fullPath: '/copilot'
+      preLoaderRoute: typeof AppCopilotRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppCopilotRoute: typeof AppCopilotRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppGraphRoute: typeof AppGraphRoute
   AppProfileRoute: typeof AppProfileRoute
@@ -194,6 +214,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCopilotRoute: AppCopilotRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppGraphRoute: AppGraphRoute,
   AppProfileRoute: AppProfileRoute,
