@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy, GraduationCap, Brain } from "lucide-react";
+import { ArrowUpRight, FileText, Sparkles, TrendingUp, Award, Briefcase, Code2, Trophy, GraduationCap, Brain, Wand2, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { loadDemoStudent } from "@/lib/demo.functions";
+import { rebuildRelationships } from "@/lib/relationships.functions";
 import {
   Area,
   AreaChart,
@@ -44,6 +48,9 @@ function Dashboard() {
   const [recent, setRecent] = useState<DocRow[]>([]);
   const [skills, setSkills] = useState<SkillRow[]>([]);
   const [catDocs, setCatDocs] = useState<CatDoc[]>([]);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const loadDemo = useServerFn(loadDemoStudent);
+  const discover = useServerFn(rebuildRelationships);
 
   useEffect(() => {
     const load = async () => {
@@ -83,6 +90,44 @@ function Dashboard() {
     };
     load();
   }, []);
+
+  const reload = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const tables = ["documents", "skills", "certifications", "projects", "internships", "achievements"] as const;
+    const results = await Promise.all(tables.map((t) => supabase.from(t).select("*", { count: "exact", head: true })));
+    setCounts({
+      documents: results[0].count ?? 0,
+      skills: results[1].count ?? 0,
+      certifications: results[2].count ?? 0,
+      projects: results[3].count ?? 0,
+      internships: results[4].count ?? 0,
+      achievements: results[5].count ?? 0,
+    });
+    const { data: docs } = await supabase.from("documents").select("id, name, doc_type, size_bytes, tags, created_at").order("created_at", { ascending: false }).limit(6);
+    setRecent((docs ?? []) as DocRow[]);
+    const { data: sk } = await supabase.from("skills").select("name, level").order("level", { ascending: false }).limit(6);
+    setSkills((sk ?? []) as SkillRow[]);
+    const { data: cd } = await supabase.from("documents").select("id, name, category, confidence, created_at").not("category", "is", null).order("created_at", { ascending: false }).limit(200);
+    setCatDocs((cd ?? []) as CatDoc[]);
+  };
+
+  const handleLoadDemo = async () => {
+    if (demoLoading) return;
+    if (counts.documents > 0 && !confirm("This replaces your current skills, projects, certifications, internships and achievements with sample demo data. Continue?")) return;
+    setDemoLoading(true);
+    try {
+      const res = await loadDemo();
+      toast.success(`Demo loaded — ${res.counts.documents} documents, ${res.counts.skills} skills.`);
+      await reload();
+      // Discover relationships in the background — don't block the UI.
+      discover().then((r) => toast.success(`Discovered ${r.edges} relationships`)).catch(() => {});
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load demo");
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   const statCards = [
     { label: "Total Documents", value: counts.documents, icon: FileText },
@@ -130,6 +175,10 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={handleLoadDemo} disabled={demoLoading} variant="secondary" className="gap-2">
+              {demoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              {demoLoading ? "Loading…" : "Load Demo Student"}
+            </Button>
             <Button asChild variant="secondary">
               <Link to="/upload">Upload documents</Link>
             </Button>
