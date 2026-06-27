@@ -5,6 +5,7 @@ import {
   Search,
   Network,
   Clock,
+  Compass,
   User,
   Sparkles,
   LogOut,
@@ -31,6 +32,7 @@ const nav = [
   { title: "AI Search", url: "/search", icon: Search },
   { title: "Knowledge Graph", url: "/graph", icon: Network },
   { title: "Digital Timeline", url: "/timeline", icon: Clock },
+  { title: "Career Copilot", url: "/copilot", icon: Compass },
   { title: "Profile", url: "/profile", icon: User },
 ];
 
