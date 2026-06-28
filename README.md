@@ -2,6 +2,12 @@
 
 An AI-powered identity vault for students. Upload documents, extract skills, projects, certifications, internships, and achievements, then explore them through dashboards, a knowledge graph, timeline, natural-language search, and a career copilot.
 
+## Links
+
+- **Live site**: https://identity-os-student.lovable.app
+- **Preview**: https://id-preview--1bdb7cc8-bbfc-4154-a0b6-30c87232d1a5.lovable.app
+- **Project**: https://lovable.dev/projects/1bdb7cc8-bbfc-4154-a0b6-30c87232d1a5
+
 ## Features
 
 - **Dashboard** — Overview of documents, detected skills, certifications, projects, internships, and achievements with AI categorization and document activity.
