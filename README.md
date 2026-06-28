@@ -114,4 +114,4 @@ This project is configured for edge deployment via TanStack Start's Nitro build.
 
 ## License
 
-Private — built for student identity management.
+Public — built for student identity management.
